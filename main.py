@@ -3,11 +3,12 @@ import PyPDF2
 import streamlit as st
 from dotenv import load_dotenv
 from langchain_groq import ChatGroq
-from langchain.vectorstores import FAISS
-from langchain_huggingface import HuggingFaceEmbeddings
-from langchain.text_splitter import CharacterTextSplitter
+from langchain_community.vectorstores import FAISS
+from langchain_community.document_loaders import PyPDFLoader
+from langchain_text_splitters import CharacterTextSplitter, RecursiveCharacterTextSplitter
 from langchain.chains.question_answering import load_qa_chain
-from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain.embeddings import HuggingFaceEmbeddings
+
 
 
 load_dotenv()
@@ -63,17 +64,39 @@ try:
         document = FAISS.from_texts(splitted_text, embedding=embedding_model)
         qa = load_qa_chain(llm=llm, chain_type="stuff")
 
+        #initializing the chat history
+        if "messages" not in st.session_state:
+            st.session_state.messages = []
+
+        # Displaying the chat history
+        for message in st.session_state["messages"]:
+            with st.chat_message(message["role"]):
+                st.markdown(message["content"])
+
+
+
         if user_prompt := st.chat_input("Say something"):
 
-            st.write(f"User : {user_prompt}")
+            # st.write(f"User : {user_prompt}")
+            st.chat_message("user").markdown(user_prompt)
+            st.session_state.messages.append({"role": "user", "content": user_prompt})
+
             retriver = document.similarity_search(user_prompt)
 
             print("[+] Document Retrive")
 
+            
+
             llm_response = qa.invoke(
                 {"input_documents": retriver, "question": user_prompt}
             )
-            st.write(f"Asistant Response : {llm_response["output_text"]}")
+            with st.chat_message("assistant"):
+                st.markdown("Thinking...")
+                st.markdown(f"{llm_response['output_text']}")
+
+            st.session_state["messages"].append({"role": "user", "content": user_prompt})
+            st.session_state["messages"].append({"role": "assistant", "content": llm_response["output_text"]})
+            # st.write(f"Asistant Response : {llm_response["output_text"]}")
 
 except Exception as ex:
     print(f"[+] Exception:{str(ex)}")
